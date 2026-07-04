@@ -2,16 +2,35 @@
   "name": "your-thinking-style",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "test:api": "tsx --test tests/analyze-route.test.ts",
+    "test:prompt": "tsx --test tests/build-analysis-prompt.test.ts",
+    "lint": "eslint",
+    "test:input": "node --test tests/input-validation.test.mts",
+    "test:site": "node --test tests/site-content.test.mts",
+    "test:workspace": "tsx --test tests/workspace-config.test.mts",
+    "test:display": "tsx --test tests/analysis-display.test.mts",
+    "test:code-editor": "node --test tests/code-editor-config.test.mts",
+    "test:annotations": "tsx --test tests/code-location-resolver.test.mts tests/code-annotation-decorations.test.mts",
+    "test:error-linkage": "tsx --test tests/error-linkage.test.mts",
+    "test:reanalysis": "tsx --test tests/reanalysis.test.mts",
+    "test:schema-diagnostics": "tsx --test tests/schema-diagnostics.test.ts",
+    "test:schema": "tsx --test src/schemas/analysis-response.test.ts",
+    "test:dock-layout": "tsx --test tests/diagnostic-dock-layout.test.mts",
+    "test": "npm run test:site && npm run test:workspace && npm run test:input && npm run test:display && npm run test:code-editor && npm run test:annotations && npm run test:error-linkage && npm run test:reanalysis && npm run test:dock-layout && npm run test:prompt && npm run test:schema && npm run test:schema-diagnostics && npm run test:api"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "monaco-editor": "^0.55.1",
     "next": "16.2.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-resizable-panels": "^4.11.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,6 +40,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

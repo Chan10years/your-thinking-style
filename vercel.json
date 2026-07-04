@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "env": {
+    "DEEPSEEK_API_ENDPOINT": "https://api.deepseek.com/chat/completions",
+    "DEEPSEEK_MODEL": "deepseek-v4-pro"
+  }
+}
