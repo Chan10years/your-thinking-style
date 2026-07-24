@@ -137,7 +137,9 @@ export function AnalysisResultWorkspace({
             onClick={onReanalyze}
             disabled={isReanalyzing}
           >
-            {isReanalyzing ? "重新分析中…" : "重新分析"}
+            {isReanalyzing
+              ? "重新深度分析中，可能需要几分钟…"
+              : "重新分析"}
           </button>
         </div>
         <div className="analysis-result-problem__body">

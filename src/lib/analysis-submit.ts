@@ -72,14 +72,54 @@ export function canStartAnalysisRequest(isSubmitting: boolean) {
   return !isSubmitting;
 }
 
+const ANALYSIS_SESSION_COOKIE = "your-thinking-style-session";
+let runtimeAnalysisSessionId: string | null = null;
+
+function getAnalysisSessionId(explicitSessionId?: string) {
+  if (explicitSessionId) {
+    return explicitSessionId;
+  }
+
+  if (runtimeAnalysisSessionId) {
+    return runtimeAnalysisSessionId;
+  }
+
+  if (typeof document !== "undefined") {
+    const encodedName = `${ANALYSIS_SESSION_COOKIE}=`;
+    const existing = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(encodedName))
+      ?.slice(encodedName.length);
+
+    if (existing) {
+      runtimeAnalysisSessionId = decodeURIComponent(existing);
+      return runtimeAnalysisSessionId;
+    }
+  }
+
+  runtimeAnalysisSessionId = crypto.randomUUID();
+
+  if (typeof document !== "undefined") {
+    document.cookie = `${ANALYSIS_SESSION_COOKIE}=${encodeURIComponent(runtimeAnalysisSessionId)}; Path=/; SameSite=Lax`;
+  }
+
+  return runtimeAnalysisSessionId;
+}
+
 export async function requestAnalysis(
   input: AnalysisInput,
   fetcher: typeof fetch = fetch,
+  sessionId?: string,
 ): Promise<AnalysisRequestResult> {
   try {
+    const analysisSessionId = getAnalysisSessionId(sessionId);
     const response = await fetcher("/api/analyze", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-analysis-session-id": analysisSessionId,
+      },
       body: JSON.stringify(input),
     });
     const parsedPayload = await parseAnalysisServicePayload(response);

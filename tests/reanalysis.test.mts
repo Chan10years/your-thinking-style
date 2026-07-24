@@ -83,14 +83,19 @@ const analysisB = {
 
 test("reanalysis request sends the current problem, code, supplemental input, and API key", async () => {
   const calls: RequestInit[] = [];
+  const sessionId = "44444444-4444-4444-8444-444444444444";
   const result = await requestAnalysis(input, async (_url, init) => {
     calls.push(init ?? {});
     return Response.json({ success: true, data: analysisB });
-  });
+  }, sessionId);
 
   assert.equal(result.success, true);
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(String(calls[0].body)), input);
+  assert.equal(
+    new Headers(calls[0].headers).get("x-analysis-session-id"),
+    sessionId,
+  );
 });
 
 test("request failure returns a clear network message", async () => {

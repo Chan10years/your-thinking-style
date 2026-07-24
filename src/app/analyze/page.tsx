@@ -13,6 +13,7 @@ import {
   Separator,
   type Layout,
   useGroupRef,
+  usePanelRef,
 } from "react-resizable-panels";
 
 import { ApiKeyDialog } from "@/components/api-key-dialog";
@@ -71,6 +72,17 @@ const PANEL_IDS = {
   failure: "failure-panel",
 } as const;
 
+const SUPPLEMENTAL_FIELDS: Array<keyof AnalysisInput> = [
+  "userThought",
+  "failureInput",
+  "expectedOutput",
+  "actualOutput",
+];
+
+function hasSupplementalInputError(errors: AnalysisInputErrors) {
+  return SUPPLEMENTAL_FIELDS.some((field) => Boolean(errors[field]));
+}
+
 export default function AnalyzePage() {
   const [form, setForm] = useState<AnalysisInput>(emptyInput);
   const [errors, setErrors] = useState<AnalysisInputErrors>({});
@@ -82,6 +94,7 @@ export default function AnalyzePage() {
   const [activeFailureField, setActiveFailureField] =
     useState<FailureField>("failureInput");
   const [isApiKeyOpen, setIsApiKeyOpen] = useState(false);
+  const [isSupplementalOpen, setIsSupplementalOpen] = useState(false);
   const [themePreference, setThemePreference] =
     useState<ThemePreference>("system");
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
@@ -90,6 +103,7 @@ export default function AnalyzePage() {
   const mainGroupRef = useGroupRef();
   const rightGroupRef = useGroupRef();
   const supplementalGroupRef = useGroupRef();
+  const supplementalPanelRef = usePanelRef();
   const codeEditorRef = useRef<CodeEditorHandle>(null);
   const analysisRequestInFlightRef = useRef(false);
   const workspaceLayoutRef = useRef<WorkspaceLayout>(
@@ -191,6 +205,7 @@ export default function AnalyzePage() {
       [PANEL_IDS.thought]: restored.supplemental.thought,
       [PANEL_IDS.failure]: restored.supplemental.failure,
     });
+    supplementalPanelRef.current?.collapse();
     hasRestoredLayoutRef.current = true;
     layoutEditor();
   }, [
@@ -198,7 +213,23 @@ export default function AnalyzePage() {
     mainGroupRef,
     rightGroupRef,
     supplementalGroupRef,
+    supplementalPanelRef,
   ]);
+
+  const setSupplementalOpen = useCallback(
+    (open: boolean) => {
+      setIsSupplementalOpen(open);
+      window.requestAnimationFrame(() => {
+        if (open) {
+          supplementalPanelRef.current?.expand();
+        } else {
+          supplementalPanelRef.current?.collapse();
+        }
+        layoutEditor();
+      });
+    },
+    [layoutEditor, supplementalPanelRef],
+  );
 
   function updateField(field: keyof AnalysisInput, value: string) {
     const nextForm = { ...form, [field]: value };
@@ -228,6 +259,13 @@ export default function AnalyzePage() {
     if (!result.isValid) {
       setSubmitState("invalid");
       setServerMessage("");
+
+      if (hasSupplementalInputError(result.errors)) {
+        setIsSupplementalOpen(true);
+        window.requestAnimationFrame(() =>
+          supplementalPanelRef.current?.expand(),
+        );
+      }
 
       if (result.errors.apiKey) {
         setIsApiKeyOpen(true);
@@ -302,8 +340,8 @@ export default function AnalyzePage() {
             >
               {submitState === "submitting"
                 ? analysisResult
-                  ? "重新分析中…"
-                  : "分析中…"
+                  ? "重新深度分析中，可能需要几分钟…"
+                  : "深度分析中，可能需要几分钟…"
                 : analysisResult
                   ? "重新分析"
                   : "开始分析"}
@@ -463,9 +501,33 @@ export default function AnalyzePage() {
               <Panel
                 id={PANEL_IDS.supplemental}
                 className="workspace-resizable-panel"
+                panelRef={supplementalPanelRef}
+                collapsible
+                collapsedSize="42px"
                 defaultSize={`${DEFAULT_WORKSPACE_LAYOUT.right.supplemental}%`}
                 minSize={isCompactSupplemental ? "360px" : "180px"}
               >
+                <section
+                  className={`workspace-supplemental-shell ${
+                    isSupplementalOpen ? "is-open" : "is-collapsed"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="workspace-supplemental-toggle"
+                    aria-expanded={isSupplementalOpen}
+                    aria-controls="workspace-supplemental-content"
+                    onClick={() => setSupplementalOpen(!isSupplementalOpen)}
+                  >
+                    <span>补充信息（可选）</span>
+                    <span>{isSupplementalOpen ? "收起" : "展开"}</span>
+                  </button>
+
+                {isSupplementalOpen ? (
+                <div
+                  id="workspace-supplemental-content"
+                  className="workspace-supplemental-content"
+                >
                 <Group
                   id="workspace-supplemental-group"
                   groupRef={supplementalGroupRef}
@@ -603,6 +665,9 @@ export default function AnalyzePage() {
                     </section>
                   </Panel>
                 </Group>
+                </div>
+                ) : null}
+                </section>
               </Panel>
             </Group>
           </Panel>

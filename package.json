@@ -18,10 +18,12 @@
     "test:annotations": "tsx --test tests/code-location-resolver.test.mts tests/code-annotation-decorations.test.mts",
     "test:error-linkage": "tsx --test tests/error-linkage.test.mts",
     "test:reanalysis": "tsx --test tests/reanalysis.test.mts",
+    "test:supplemental": "node --test tests/supplemental-collapse.test.mts",
+    "test:request-guard": "tsx --test tests/analysis-request-guard.test.ts",
     "test:schema-diagnostics": "tsx --test tests/schema-diagnostics.test.ts",
     "test:schema": "tsx --test src/schemas/analysis-response.test.ts",
     "test:dock-layout": "tsx --test tests/diagnostic-dock-layout.test.mts",
-    "test": "npm run test:site && npm run test:workspace && npm run test:input && npm run test:display && npm run test:code-editor && npm run test:annotations && npm run test:error-linkage && npm run test:reanalysis && npm run test:dock-layout && npm run test:prompt && npm run test:schema && npm run test:schema-diagnostics && npm run test:api"
+  "test": "npm run test:site && npm run test:workspace && npm run test:input && npm run test:display && npm run test:code-editor && npm run test:annotations && npm run test:error-linkage && npm run test:reanalysis && npm run test:supplemental && npm run test:request-guard && npm run test:dock-layout && npm run test:prompt && npm run test:schema && npm run test:schema-diagnostics && npm run test:api"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

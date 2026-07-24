@@ -3,8 +3,14 @@ import test, { afterEach, beforeEach } from "node:test";
 
 import type { AnalysisResponse } from "../src/types/analysis";
 import { POST } from "../src/app/api/analyze/route";
+import {
+  DeepSeekError,
+  requestDeepSeekAnalysis,
+} from "../src/lib/deepseek";
 
 const originalFetch = globalThis.fetch;
+const originalSetTimeout = globalThis.setTimeout;
+const originalDateNow = Date.now;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalDeepSeekEndpoint = process.env.DEEPSEEK_API_ENDPOINT;
 const originalDeepSeekModel = process.env.DEEPSEEK_MODEL;
@@ -83,6 +89,8 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  globalThis.setTimeout = originalSetTimeout;
+  Date.now = originalDateNow;
   process.env.NODE_ENV = originalNodeEnv;
   if (originalDeepSeekEndpoint === undefined) {
     delete process.env.DEEPSEEK_API_ENDPOINT;
@@ -97,10 +105,24 @@ afterEach(() => {
   console.error = originalConsoleError;
 });
 
-function createRequest(body: unknown) {
+function createRequest(
+  body: unknown,
+  sessionId?: string,
+  cookieSessionId?: string,
+) {
+  const headers = new Headers({ "content-type": "application/json" });
+
+  if (sessionId) {
+    headers.set("x-analysis-session-id", sessionId);
+  }
+
+  if (cookieSessionId) {
+    headers.set("cookie", `your-thinking-style-session=${cookieSessionId}`);
+  }
+
   return new Request("http://localhost/api/analyze", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
 }
@@ -164,6 +186,8 @@ function mockDeepSeekResponses(responses: MockDeepSeekResponse[]) {
         JSON.parse(String(call.body)) as {
           model: string;
           messages: Array<{ role: string; content: string }>;
+          thinking?: { type?: string };
+          reasoning_effort?: string;
         },
       ),
   };
@@ -201,6 +225,29 @@ test("uses the configured DeepSeek V4 Pro model", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(requestBodies[0].model, "deepseek-v4-pro");
+  assert.deepEqual(requestBodies[0].thinking, { type: "enabled" });
+  assert.equal(requestBodies[0].reasoning_effort, "high");
+});
+
+test("classifies an abort while reading a successful DeepSeek response body as a timeout", async () => {
+  globalThis.setTimeout = ((handler: TimerHandler) =>
+    originalSetTimeout(handler, 1)) as typeof setTimeout;
+  globalThis.fetch = async (_input, init) =>
+    ({
+      ok: true,
+      json: () =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        }),
+    }) as Response;
+
+  await assert.rejects(
+    requestDeepSeekAnalysis("sk-redacted", "prompt", 5),
+    (error: unknown) =>
+      error instanceof DeepSeekError && error.code === "DEEPSEEK_TIMEOUT",
+  );
 });
 
 test("returns a safe configuration error when production DeepSeek env is missing", async () => {
@@ -267,6 +314,32 @@ test("retries the full analysis once when the first JSON fails schema validation
   assert.match(secondPrompt ?? "", /"actualOutput": "1"/);
 });
 
+test("shares one 270-second deadline across the initial analysis and schema retry", async () => {
+  const nowValues = [0, 0, 0, 20_000, 20_000, 20_000, 20_000];
+  let nowIndex = 0;
+  Date.now = () =>
+    nowValues[Math.min(nowIndex++, nowValues.length - 1)];
+  const capturedTimeouts: number[] = [];
+  globalThis.setTimeout = ((_handler: TimerHandler, timeout?: number) => {
+    capturedTimeouts.push(Number(timeout));
+    return 0 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  mockDeepSeekResponses([
+    { content: JSON.stringify({ schemaVersion: "mvp-1" }) },
+    { content: JSON.stringify(validAnalysisResponse) },
+  ]);
+
+  const response = await POST(
+    createRequest(
+      validInput,
+      "12121212-1212-4212-8212-121212121212",
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedTimeouts, [270_000, 250_000]);
+});
+
 test("rejects invalid input without calling DeepSeek", async () => {
   const getCalls = mockDeepSeekContent(JSON.stringify(validAnalysisResponse));
 
@@ -284,16 +357,117 @@ test("rejects invalid input without calling DeepSeek", async () => {
   assert.equal(getCalls(), 0);
 });
 
-test("rejects model content that is not valid JSON", async () => {
-  const getCalls = mockDeepSeekContent("not-json");
+test("retries once when the first model content is not valid JSON", async () => {
+  const mock = mockDeepSeekResponses([
+    { content: "not-json" },
+    { content: JSON.stringify(validAnalysisResponse) },
+  ]);
+
+  const response = await POST(createRequest(validInput));
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.success, true);
+  assert.equal(mock.getCalls(), 2);
+});
+
+test("returns INVALID_MODEL_RESPONSE after two invalid JSON model responses", async () => {
+  const mock = mockDeepSeekResponses([
+    { content: "first-not-json" },
+    { content: "second-not-json" },
+  ]);
 
   const response = await POST(createRequest(validInput));
   const payload = await response.json();
 
   assert.equal(response.status, 502);
   assert.equal(payload.success, false);
-  assert.equal(payload.error.code, "INVALID_MODEL_JSON");
-  assert.equal(getCalls(), 1);
+  assert.equal(payload.error.code, "INVALID_MODEL_RESPONSE");
+  assert.equal(mock.getCalls(), 2);
+});
+
+test("rejects a simultaneous analysis request for the same browser session", async () => {
+  const sessionId = "55555555-5555-4555-8555-555555555555";
+  let releaseFetch: (() => void) | undefined;
+  const fetchStarted = new Promise<void>((resolve) => {
+    globalThis.fetch = async () => {
+      resolve();
+      await new Promise<void>((release) => {
+        releaseFetch = release;
+      });
+      return Response.json({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: JSON.stringify(validAnalysisResponse) },
+          },
+        ],
+      });
+    };
+  });
+
+  const firstResponsePromise = POST(
+    createRequest(validInput, sessionId),
+  );
+  await fetchStarted;
+
+  const secondResponse = await POST(createRequest(validInput, sessionId));
+  const secondPayload = await secondResponse.json();
+
+  assert.equal(secondResponse.status, 409);
+  assert.equal(secondPayload.error.code, "ANALYSIS_IN_PROGRESS");
+
+  releaseFetch?.();
+  const firstResponse = await firstResponsePromise;
+  assert.equal(firstResponse.status, 200);
+});
+
+test("rejects the fourth analysis request in one minute for the same browser session", async () => {
+  const sessionId = "66666666-6666-4666-8666-666666666666";
+  const mock = mockDeepSeekResponses([
+    { content: JSON.stringify(validAnalysisResponse) },
+  ]);
+
+  for (let index = 0; index < 3; index += 1) {
+    const response = await POST(createRequest(validInput, sessionId));
+    assert.equal(response.status, 200);
+  }
+
+  const response = await POST(createRequest(validInput, sessionId));
+  const payload = await response.json();
+
+  assert.equal(response.status, 429);
+  assert.equal(payload.error.code, "RATE_LIMIT_EXCEEDED");
+  assert.match(response.headers.get("retry-after") ?? "", /^\d+$/);
+  assert.equal(mock.getCalls(), 3);
+});
+
+test("keeps the existing cookie session limit after a page refresh changes the header id", async () => {
+  const cookieSessionId = "77777777-7777-4777-8777-777777777777";
+  const mock = mockDeepSeekResponses([
+    { content: JSON.stringify(validAnalysisResponse) },
+  ]);
+
+  for (let index = 0; index < 3; index += 1) {
+    const headerSessionId = `88888888-8888-4888-8888-88888888888${index}`;
+    const response = await POST(
+      createRequest(validInput, headerSessionId, cookieSessionId),
+    );
+    assert.equal(response.status, 200);
+  }
+
+  const response = await POST(
+    createRequest(
+      validInput,
+      "99999999-9999-4999-8999-999999999999",
+      cookieSessionId,
+    ),
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 429);
+  assert.equal(payload.error.code, "RATE_LIMIT_EXCEEDED");
+  assert.equal(mock.getCalls(), 3);
 });
 
 test("returns a clear error when DeepSeek returns a non-JSON HTTP body", async () => {
@@ -379,11 +553,14 @@ test("logs bounded JSON parse diagnostics only in development", async () => {
   const response = await POST(createRequest(validInput));
 
   assert.equal(response.status, 502);
-  assert.equal(logs.length, 2);
+  assert.equal(logs.length, 4);
   assert.deepEqual(logs[0], ["[DeepSeek Analysis Validation]"]);
   assert.equal((logs[1][0] as { phase?: unknown }).phase, "json_parse");
-  assert.equal((logs[1][0] as { retryTriggered?: unknown }).retryTriggered, false);
+  assert.equal((logs[1][0] as { retryTriggered?: unknown }).retryTriggered, true);
   assert.equal(typeof (logs[1][0] as { elapsedMs?: unknown }).elapsedMs, "number");
+  assert.deepEqual(logs[2], ["[DeepSeek Analysis Validation]"]);
+  assert.equal((logs[3][0] as { phase?: unknown }).phase, "json_parse");
+  assert.equal((logs[3][0] as { retryTriggered?: unknown }).retryTriggered, false);
 
   const serializedLogs = JSON.stringify(logs);
   assert.equal(serializedLogs.includes(apiKey), false);

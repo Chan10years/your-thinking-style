@@ -43,3 +43,15 @@ yarn-error.log*
 next-env.d.ts
 
 .playwright-mcp/
+
+# Local design and verification output
+/artifacts/
+/docs/
+design-qa.md
+
+# Local project guidance
+AGENTS.md
+PRODUCT.md
+MVP.md
+DEPLOYMENT.md
+KNOWN_ISSUES.md

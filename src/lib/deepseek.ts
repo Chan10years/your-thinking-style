@@ -1,5 +1,5 @@
 export const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-pro";
-export const DEEPSEEK_TIMEOUT_MS = 61_000;
+export const DEEPSEEK_TIMEOUT_MS = 270_000;
 
 const DEFAULT_DEEPSEEK_ENDPOINT =
   "https://api.deepseek.com/chat/completions";
@@ -80,10 +80,11 @@ function extractAnalysisResult(body: unknown): DeepSeekAnalysisResult | null {
 export async function requestDeepSeekAnalysis(
   apiKey: string,
   prompt: string,
+  timeoutMs = DEEPSEEK_TIMEOUT_MS,
 ) {
   const config = getDeepSeekRuntimeConfig();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(config.endpoint, {
@@ -105,6 +106,8 @@ export async function requestDeepSeekAnalysis(
             content: prompt,
           },
         ],
+        thinking: { type: "enabled" },
+        reasoning_effort: "high",
         stream: false,
         response_format: { type: "json_object" },
       }),
@@ -123,6 +126,13 @@ export async function requestDeepSeekAnalysis(
     try {
       body = await response.json();
     } catch {
+      if (controller.signal.aborted) {
+        throw new DeepSeekError(
+          "DEEPSEEK_TIMEOUT",
+          "DeepSeek 深度分析超过 4 分 30 秒，请稍后重试或减少输入内容。",
+        );
+      }
+
       throw new DeepSeekError(
         "DEEPSEEK_INVALID_RESPONSE",
         "DeepSeek 返回内容无法解析，请稍后重试。",
@@ -147,7 +157,7 @@ export async function requestDeepSeekAnalysis(
     if (controller.signal.aborted) {
       throw new DeepSeekError(
         "DEEPSEEK_TIMEOUT",
-        "DeepSeek 响应超时，请稍后重试或减少输入内容。",
+        "DeepSeek 深度分析超过 4 分 30 秒，请稍后重试或减少输入内容。",
       );
     }
 
