@@ -44,9 +44,8 @@ next-env.d.ts
 
 .playwright-mcp/
 
-# Local design and verification output
+# Local verification output
 /artifacts/
-/docs/
 design-qa.md
 
 # Local project guidance
