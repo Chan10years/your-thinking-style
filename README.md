@@ -34,10 +34,17 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 
 ```bash
 npm run dev       # 启动开发服务器
+npm run infra:up  # 启动 hosted 本机 PostgreSQL 与 Mailpit（需要 Docker）
+npm run infra:down # 停止 hosted 本机基础设施
 npm run lint      # 检查代码规范
 npm run build     # 构建生产版本
 npm test          # 运行测试
 ```
+
+`npm run dev` 默认使用 `APP_EDITION=local`，不读取数据库或账户配置，因此不启动
+Docker 也可以直接使用本地诊断工作台。hosted 本机联调使用 `.env.hosted`（可由
+`.env.hosted.example` 复制），并通过 Docker Compose 提供 PostgreSQL 和 Mailpit；
+数据库迁移命令会在账户数据表实现后启用。
 
 ## 技术栈
 
