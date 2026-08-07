@@ -47,6 +47,7 @@ next-env.d.ts
 
 # Local verification output
 /artifacts/
+.data/
 design-qa.md
 
 # Local project guidance
