@@ -14,6 +14,10 @@ import {
   formatSchemaValidationIssues,
   hasPersonalizedReferenceCodeIssue,
 } from "../../../lib/schema-diagnostics";
+import {
+  attachAnalysisSession,
+  resolveAnalysisActor,
+} from "../../../server/analysis/actor";
 
 export const maxDuration = 300;
 
@@ -48,40 +52,6 @@ function errorResponse(code: string, message: string, status: number) {
     },
     { status },
   );
-}
-
-const ANALYSIS_SESSION_COOKIE = "your-thinking-style-session";
-const SESSION_ID_PATTERN = /^[0-9a-z-]{16,128}$/i;
-
-function getAnalysisSessionId(request: Request) {
-  const cookieSessionId = request.headers
-    .get("cookie")
-    ?.split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${ANALYSIS_SESSION_COOKIE}=`))
-    ?.slice(ANALYSIS_SESSION_COOKIE.length + 1);
-
-  if (cookieSessionId && SESSION_ID_PATTERN.test(cookieSessionId)) {
-    return cookieSessionId;
-  }
-
-  const headerSessionId = request.headers
-    .get("x-analysis-session-id")
-    ?.trim();
-
-  if (headerSessionId && SESSION_ID_PATTERN.test(headerSessionId)) {
-    return headerSessionId;
-  }
-
-  return crypto.randomUUID();
-}
-
-function attachAnalysisSession(response: Response, sessionId: string) {
-  response.headers.append(
-    "set-cookie",
-    `${ANALYSIS_SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax`,
-  );
-  return response;
 }
 
 type ModelValidationPhase = "json_parse" | "schema_validation";
@@ -187,6 +157,45 @@ function remainingAnalysisBudget(deadline: number) {
   return Math.max(1, deadline - Date.now());
 }
 
+type HistoryPersistenceResult = {
+  historySaved: boolean;
+  historyId?: string;
+};
+
+function successResponse(
+  data: z.infer<typeof analysisResponseSchema>,
+  persistence: HistoryPersistenceResult | null,
+) {
+  return Response.json({
+    success: true,
+    data,
+    ...(persistence ?? {}),
+  });
+}
+
+async function persistHostedAnalysis(
+  userId: string,
+  input: Omit<z.infer<typeof analysisRequestSchema>, "apiKey">,
+  result: z.infer<typeof analysisResponseSchema>,
+): Promise<HistoryPersistenceResult> {
+  try {
+    const { persistSuccessfulAnalysis } = await import(
+      "../../../server/history/persistence"
+    );
+    const persistence = await persistSuccessfulAnalysis(
+      userId,
+      input,
+      result as unknown as Record<string, unknown>,
+    );
+    return {
+      historySaved: persistence.historySaved,
+      historyId: persistence.historyId,
+    };
+  } catch {
+    return { historySaved: false };
+  }
+}
+
 export async function POST(request: Request) {
   let requestBody: unknown;
 
@@ -211,7 +220,11 @@ export async function POST(request: Request) {
 
   const { apiKey, ...analysisInput } = inputResult.data;
   const prompt = buildAnalysisPrompt(analysisInput);
-  const sessionId = getAnalysisSessionId(request);
+  const actor = await resolveAnalysisActor(request);
+  if (!actor) {
+    return errorResponse("AUTH_REQUIRED", "请先登录并验证邮箱。", 401);
+  }
+  const sessionId = actor.sessionId;
   const requestDecision = analysisRequestGuard.begin(sessionId);
 
   if (!requestDecision.allowed) {
@@ -248,11 +261,12 @@ export async function POST(request: Request) {
     );
 
     if (firstAttempt.success) {
+      const persistence =
+        actor.type === "hosted"
+          ? await persistHostedAnalysis(actor.userId, analysisInput, firstAttempt.data)
+          : null;
       return attachAnalysisSession(
-        Response.json({
-          success: true,
-          data: firstAttempt.data,
-        }),
+        successResponse(firstAttempt.data, persistence),
         sessionId,
       );
     }
@@ -279,11 +293,12 @@ export async function POST(request: Request) {
     );
 
     if (secondAttempt.success) {
+      const persistence =
+        actor.type === "hosted"
+          ? await persistHostedAnalysis(actor.userId, analysisInput, secondAttempt.data)
+          : null;
       return attachAnalysisSession(
-        Response.json({
-          success: true,
-          data: secondAttempt.data,
-        }),
+        successResponse(secondAttempt.data, persistence),
         sessionId,
       );
     }
