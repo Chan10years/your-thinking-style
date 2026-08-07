@@ -19,9 +19,9 @@ PostgreSQL 17.10、Mailpit 1.30.0、Sharp 0.35.3、Node test runner、Docker Com
 
 ## 执行状态（2026-08-07）
 
-批次一至六的代码、自动化测试和 local/hosted 两种生产构建已经完成，并分别保存在独立
-提交中。最终自动化门槛结果：`npm test`、`npm run lint`、local `npm run build`、hosted
-`npm run build` 均退出码 0；工作区保持干净。
+批次一至七的代码、自动化测试、备份工具和 local/hosted 两种生产构建已经完成，并分别
+保存在独立提交中。最终自动化门槛结果：`npm test`、`npm run lint`、local
+`npm run build`、hosted `npm run build` 均退出码 0；工作区保持干净。
 
 仍需在开发者本机 Docker Desktop 中完成的运行态验收：
 
