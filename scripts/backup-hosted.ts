@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { cp, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, parse, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import {
   buildBackupManifest,
@@ -8,9 +10,24 @@ import {
   type BackupManifest,
 } from "../src/server/backup/manifest";
 
-function argument(name: string, fallback: string): string {
+function argument(name: string): string | null {
   const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] ?? fallback : fallback;
+  const value = index >= 0 ? process.argv[index + 1] : undefined;
+  return value && !value.startsWith("--") ? value : null;
+}
+
+function assertSafeOutputRoot(outputRoot: string): void {
+  const normalized = resolve(outputRoot);
+  const repoRoot = resolve(process.cwd());
+  const home = resolve(homedir());
+  const filesystemRoot = parse(normalized).root;
+
+  if (normalized === filesystemRoot || normalized === home) {
+    throw new Error("BACKUP_OUTPUT_UNSAFE");
+  }
+  if (normalized === repoRoot) {
+    throw new Error("BACKUP_OUTPUT_REPO_ROOT");
+  }
 }
 
 function runDockerPgDump(outputPath: string): Promise<void> {
@@ -48,19 +65,35 @@ function runDockerPgDump(outputPath: string): Promise<void> {
 }
 
 async function createBackup() {
-  const outputRoot = resolve(argument("--output", ".data/backups"));
-  const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
+  const outputArgument = argument("--output");
+  if (!outputArgument) throw new Error("BACKUP_OUTPUT_REQUIRED");
+  const outputRoot = resolve(outputArgument);
+  assertSafeOutputRoot(outputRoot);
+  const timestamp = `${new Date().toISOString().replaceAll(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
   const backupRoot = join(outputRoot, timestamp);
+  const stagingRoot = join(outputRoot, `.staging-${randomUUID()}`);
   const avatarSource = resolve(process.env.AVATAR_STORAGE_DIR ?? ".data/avatars");
-  await mkdir(join(backupRoot, "avatars"), { recursive: true });
-  await runDockerPgDump(join(backupRoot, "database.sql"));
-  await cp(avatarSource, join(backupRoot, "avatars"), { recursive: true, force: true });
+  await mkdir(join(stagingRoot, "avatars"), { recursive: true });
 
-  const files = ["database.sql"];
-  const avatarEntries = await collectFiles(join(backupRoot, "avatars"), "avatars");
-  const manifest = await buildBackupManifest(backupRoot, [...files, ...avatarEntries]);
-  await writeFile(join(backupRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log(`备份已生成：${backupRoot}`);
+  try {
+    await runDockerPgDump(join(stagingRoot, "database.sql"));
+    try {
+      await stat(avatarSource);
+      await cp(avatarSource, join(stagingRoot, "avatars"), { recursive: true, force: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+
+    const files = ["database.sql"];
+    const avatarEntries = await collectFiles(join(stagingRoot, "avatars"), "avatars");
+    const manifest = await buildBackupManifest(stagingRoot, [...files, ...avatarEntries]);
+    await writeFile(join(stagingRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    await rename(stagingRoot, backupRoot);
+    console.log(`备份已生成：${backupRoot}`);
+  } catch (error) {
+    await rm(stagingRoot, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 async function collectFiles(root: string, prefix: string): Promise<string[]> {
@@ -79,8 +112,9 @@ async function collectFiles(root: string, prefix: string): Promise<string[]> {
 }
 
 async function verifyBackup() {
-  const backupRoot = resolve(argument("--backup", ""));
-  if (!backupRoot) throw new Error("BACKUP_ARGUMENT_REQUIRED");
+  const backupArgument = argument("--backup");
+  if (!backupArgument) throw new Error("BACKUP_ARGUMENT_REQUIRED");
+  const backupRoot = resolve(backupArgument);
   const manifest = JSON.parse(await readFile(join(backupRoot, "manifest.json"), "utf8")) as BackupManifest;
   const valid = await verifyBackupManifest(backupRoot, manifest);
   if (!valid) throw new Error("BACKUP_CHECKSUM_MISMATCH");

@@ -17,6 +17,22 @@
 Better Auth 1.6.25、Drizzle ORM 0.45.2、Drizzle Kit 0.31.10、node-postgres 8.22.0、
 PostgreSQL 17.10、Mailpit 1.30.0、Sharp 0.35.3、Node test runner、Docker Compose。
 
+## 执行状态（2026-08-07）
+
+批次一至六的代码、自动化测试和 local/hosted 两种生产构建已经完成，并分别保存在独立
+提交中。最终自动化门槛结果：`npm test`、`npm run lint`、local `npm run build`、hosted
+`npm run build` 均退出码 0；工作区保持干净。
+
+仍需在开发者本机 Docker Desktop 中完成的运行态验收：
+
+- `npm run infra:up` 启动 PostgreSQL 与 Mailpit；
+- `npm run db:migrate` / `npm run db:check` 的真实数据库连接；
+- 注册、验证邮件、登录、资料、头像、历史、重置密码的完整 hosted 流程；
+- 独立临时卷上的备份恢复演练。
+
+这些步骤依赖本机 Docker 引擎和真实 Mailpit/数据库，不能用静态测试替代。当前 Codex
+终端没有可调用的 `docker` CLI，因此不把它们标记为已完成。
+
 ## 全局约束
 
 - 实施前先阅读配套的
@@ -46,21 +62,20 @@ compose.yaml                              本机 PostgreSQL 与 Mailpit
 drizzle.config.ts                         迁移生成配置
 drizzle/                                  进入版本控制的 SQL 迁移
 scripts/report-usage.ts                   JSON/CSV 聚合报告
-scripts/backup-hosted-data.ts             数据库与头像备份入口
+scripts/backup-hosted.ts                  数据库与头像备份入口
 src/config/edition.ts                     唯一版本能力来源
 src/server/env.ts                         服务端环境变量校验
 src/server/db/client.ts                   PostgreSQL 连接池与 Drizzle 实例
 src/server/db/schema/*.ts                 认证、资料、历史、活动表
-src/server/auth/auth.ts                   Better Auth 配置
+src/server/auth/config.ts                 Better Auth 配置
 src/server/auth/session.ts                当前用户解析与 verified 约束
 src/server/email/auth-email.ts            邮箱验证与重置邮件适配器
 src/server/profile/profile-service.ts     昵称和默认资料规则
-src/server/storage/avatar-storage.ts      头像存储接口
-src/server/storage/local-avatar-storage.ts 单机磁盘实现
+src/server/profile/avatar-storage.ts      头像存储接口与单机磁盘实现
 src/server/profile/avatar-service.ts      格式验证、Sharp 处理与替换
 src/server/analysis/analysis-service.ts    DeepSeek 分析编排
 src/server/history/history-repository.ts  历史读写与所有权
-src/server/metrics/activity-repository.ts 每日活动聚合
+src/server/stats/service.ts               每日活动聚合与使用统计
 src/server/metrics/usage-report.ts         使用人数统计查询
 src/app/api/auth/[...all]/route.ts         Better Auth HTTP 入口
 src/app/api/profile/route.ts               资料查询与修改
@@ -760,13 +775,11 @@ git commit -m "feat: add privacy-limited usage reports"
 - 创建：`src/app/register/page.tsx`
 - 创建：`src/app/verify-email/page.tsx`
 - 创建：`src/app/reset-password/page.tsx`
-- 创建：`src/app/settings/profile/page.tsx`
+- 创建：`src/app/profile/page.tsx`
 - 创建：`src/app/history/page.tsx`
-- 创建：`src/proxy.ts`
-- 创建：`tests/hosted-route-access.test.mts`
-- 创建：`tests/local-edition-isolation.test.mts`
+- 创建：`src/app/forgot-password/page.tsx`
+- 创建：`tests/hosted-pages.test.mts`
 - 修改：`src/app/page.tsx`
-- 修改：`src/app/analyze/page.tsx`
 
 **接口：**
 
@@ -785,7 +798,7 @@ git commit -m "feat: add privacy-limited usage reports"
 
 - [ ] **步骤 3：运行并确认测试失败**
 
-运行：`npm.cmd exec -- tsx --test tests/hosted-route-access.test.mts tests/local-edition-isolation.test.mts`
+运行：`npm.cmd run test:pages`
 
 - [ ] **步骤 4：实现最小功能页面**
 
@@ -810,10 +823,10 @@ git commit -m "feat: add privacy-limited usage reports"
 
 - [ ] **步骤 6：运行测试和提交**
 
-运行：`npm.cmd exec -- tsx --test tests/hosted-route-access.test.mts tests/local-edition-isolation.test.mts`
+运行：`npm.cmd run test:pages`
 
 ```bash
-git add src/app src/proxy.ts tests/hosted-route-access.test.mts tests/local-edition-isolation.test.mts
+git add src/app tests/hosted-pages.test.mts
 git commit -m "feat: complete local hosted-backend flow"
 ```
 
@@ -823,19 +836,17 @@ git commit -m "feat: complete local hosted-backend flow"
 
 **文件：**
 
-- 创建：`scripts/backup-hosted-data.ts`
-- 创建：`scripts/verify-hosted-backup.ts`
-- 创建：`docs/HOSTED_DEVELOPMENT.md`
-- 创建：`docs/BACKUP_AND_RECOVERY.md`
-- 创建：`tests/backup-config.test.mts`
+- 创建：`scripts/backup-hosted.ts`
+- 创建：`docs/hosted-backup-and-recovery.md`
+- 创建：`tests/backup-manifest.test.ts`
 - 修改：`package.json`
 - 修改：`README.md`
 
 **接口：**
 
-- 产生命令：`backup:create -- --output <explicit-directory>`
-- 产生命令：`backup:verify -- --input <explicit-archive>`
-- 备份包含：`pg_dump`自定义格式、头像目录归档、manifest SHA-256
+- 产生命令：`npm run backup:hosted -- backup --output <directory>`
+- 产生命令：`npm run backup:hosted -- verify --backup <directory>`
+- 备份包含：`pg_dump` SQL、头像目录复制、manifest SHA-256
 
 - [ ] **步骤 1：写备份安全失败测试**
 
@@ -844,12 +855,12 @@ git commit -m "feat: complete local hosted-backend flow"
 
 - [ ] **步骤 2：运行并确认测试失败**
 
-运行：`node --test tests/backup-config.test.mts`
+运行：`npm.cmd run test:backup`
 
 - [ ] **步骤 3：实现可恢复备份脚本**
 
-使用参数数组调用`pg_dump`，不拼接shell字符串；先写临时归档，校验完成后原子移动到
-显式目标；失败时保留原数据库和头像，不自动删除旧备份。
+使用参数数组调用`pg_dump`，不拼接shell字符串；先写临时目录，清单生成后原子移动到
+显式目标；失败时清理临时目录并保留原数据库、头像和旧备份。
 
 - [ ] **步骤 4：编写从空白电脑开始的中文文档**
 
@@ -863,10 +874,10 @@ git commit -m "feat: complete local hosted-backend flow"
 
 - [ ] **步骤 6：运行测试和提交**
 
-运行：`node --test tests/backup-config.test.mts`
+运行：`npm.cmd run test:backup`
 
 ```bash
-git add scripts/backup-hosted-data.ts scripts/verify-hosted-backup.ts docs/HOSTED_DEVELOPMENT.md docs/BACKUP_AND_RECOVERY.md tests/backup-config.test.mts package.json README.md
+git add scripts/backup-hosted.ts docs/hosted-backup-and-recovery.md tests/backup-manifest.test.ts package.json README.md
 git commit -m "docs: add hosted recovery workflow"
 ```
 
