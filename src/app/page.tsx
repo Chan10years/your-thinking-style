@@ -1,8 +1,16 @@
 import Link from "next/link";
 
 import { SiteHeader } from "@/components/site-header";
+import { getAppEdition } from "@/config/edition";
+import AnalyzePage from "./analyze/page";
+
+export const dynamic = "force-dynamic";
 
 export default function Home() {
+  if (getAppEdition() === "local") {
+    return <AnalyzePage />;
+  }
+
   return (
     <main className="landing-page">
       <SiteHeader />
