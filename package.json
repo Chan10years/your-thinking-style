@@ -23,6 +23,7 @@
     "test:profile": "tsx --test tests/profile.test.ts",
     "test:avatar": "tsx --test tests/avatar.test.ts",
     "test:analysis-hosted": "tsx --test tests/analysis-actor.test.ts tests/history-persistence.test.ts",
+    "test:history": "tsx --test tests/history-api.test.ts",
     "test:api": "tsx --test tests/analyze-route.test.ts",
     "test:prompt": "tsx --test tests/build-analysis-prompt.test.ts",
     "lint": "eslint",
@@ -39,7 +40,7 @@
     "test:schema-diagnostics": "tsx --test tests/schema-diagnostics.test.ts",
     "test:schema": "tsx --test src/schemas/analysis-response.test.ts",
     "test:dock-layout": "tsx --test tests/diagnostic-dock-layout.test.mts",
-  "test": "npm run test:site && npm run test:workspace && npm run test:edition && npm run test:infra && npm run test:migrations && npm run test:auth && npm run test:profile && npm run test:avatar && npm run test:analysis-hosted && npm run test:input && npm run test:display && npm run test:code-editor && npm run test:annotations && npm run test:error-linkage && npm run test:reanalysis && npm run test:supplemental && npm run test:request-guard && npm run test:dock-layout && npm run test:prompt && npm run test:schema && npm run test:schema-diagnostics && npm run test:api"
+  "test": "npm run test:site && npm run test:workspace && npm run test:edition && npm run test:infra && npm run test:migrations && npm run test:auth && npm run test:profile && npm run test:avatar && npm run test:analysis-hosted && npm run test:history && npm run test:input && npm run test:display && npm run test:code-editor && npm run test:annotations && npm run test:error-linkage && npm run test:reanalysis && npm run test:supplemental && npm run test:request-guard && npm run test:dock-layout && npm run test:prompt && npm run test:schema && npm run test:schema-diagnostics && npm run test:api"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.6.25",
