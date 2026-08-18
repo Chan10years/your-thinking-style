@@ -29,13 +29,13 @@ YourThinkingStyle 是一个面向 **C++ 算法学习** 的 AI 代码诊断工具
 
 ### 1. 输入题目、代码与补充信息
 
-![Input workspace](docs/screenshots/input-workspace.webp)
+![Input workspace](docs/screenshots/input-workspace.png)
 
 分析前，用户可以输入题目和当前代码，也可以补充“我的思路 / 卡点”和失败案例。补充信息不是必填项，但它们能让诊断更贴近用户真正的解题过程，而不是只对最终代码做静态点评。
 
 ### 2. 用失败案例把“哪里错了”变成具体证据
 
-![Failure evidence](docs/screenshots/failure-evidence.webp)
+![Failure evidence](docs/screenshots/failure-evidence.png)
 
 失败案例会显式记录 **失败输入、预期输出、实际输出 / 报错**。上面的 Two Sum 示例中，`nums = [3, 2, 4]`、`target = 6` 的预期结果是 `[1, 2]`，当前代码却返回 `[0, 0]`。
 
@@ -43,7 +43,7 @@ YourThinkingStyle 是一个面向 **C++ 算法学习** 的 AI 代码诊断工具
 
 ### 3. 分析完成后的默认界面：先还原用户思路
 
-![Default analysis view](docs/screenshots/analysis-default.webp)
+![Default analysis view](docs/screenshots/analysis-default.png)
 
 **分析完成后，默认进入「思路还原」视图。**
 
@@ -57,7 +57,7 @@ YourThinkingStyle 是一个面向 **C++ 算法学习** 的 AI 代码诊断工具
 
 ### 4. 点击错误，直接跳到对应代码位置
 
-![Error linked view](docs/screenshots/error-linked-view.webp)
+![Error linked view](docs/screenshots/error-linked-view.png)
 
 「错误解释」不只是展示一张错误卡片。**点击具体错误后，编辑器会跳转并高亮对应代码位置**，同时右侧保留错误类型、证据来源、错误原因、运行后果和局部修正建议。
 
@@ -65,7 +65,7 @@ YourThinkingStyle 是一个面向 **C++ 算法学习** 的 AI 代码诊断工具
 
 ### 5. 修正方向：先救活原思路，再教更好的方法
 
-![Repair and optimization path](docs/screenshots/repair-path.webp)
+![Repair and optimization path](docs/screenshots/repair-path.png)
 
 修正阶段会同时保留两条路径。
 
@@ -77,7 +77,7 @@ YourThinkingStyle 是一个面向 **C++ 算法学习** 的 AI 代码诊断工具
 
 ## API Key 与 Local 模式
 
-![API key dialog](docs/screenshots/api-key.webp)
+![API key dialog](docs/screenshots/api-key.png)
 
 Local 模式下，用户在页面中填写自己的 DeepSeek API Key。Key **只保存在当前页面内存中**，只随当前分析请求发送；刷新或关闭页面后消失，不写入浏览器持久存储、服务端日志或仓库文件。
 
