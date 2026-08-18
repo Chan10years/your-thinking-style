@@ -29,7 +29,7 @@ YourThinkingStyle 是一个面向 **C++ 算法学习** 的 AI 代码诊断工具
 
 ### 1. 输入题目、代码与补充信息
 
-![Input workspace](docs/screenshots/input-workspace.png)
+![Input workspace](docs/screenshots/input-workspace-filled.png)
 
 分析前，用户可以输入题目和当前代码，也可以补充“我的思路 / 卡点”和失败案例。补充信息不是必填项，但它们能让诊断更贴近用户真正的解题过程，而不是只对最终代码做静态点评。
 
