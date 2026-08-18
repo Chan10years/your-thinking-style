@@ -44,6 +44,7 @@ yarn-error.log*
 next-env.d.ts
 
 .playwright-mcp/
+.tmp-avatar-test-*/
 
 # Local verification output
 /artifacts/
