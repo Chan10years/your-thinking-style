@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17.10-alpine3.23
+    environment:
+      POSTGRES_DB: yourthinkingstyle
+      POSTGRES_USER: yourthinkingstyle
+      POSTGRES_PASSWORD: yourthinkingstyle
+    ports:
+      - "5432:5432"
+    volumes:
+      - yourthinkingstyle_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yourthinkingstyle -d yourthinkingstyle"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  mailpit:
+    image: axllent/mailpit:v1.30.0
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    volumes:
+      - yourthinkingstyle_mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8025/livez"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  yourthinkingstyle_postgres_data:
+  yourthinkingstyle_mailpit_data:

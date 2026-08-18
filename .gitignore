@@ -34,6 +34,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.hosted.example
 
 # vercel
 .vercel
@@ -43,3 +44,16 @@ yarn-error.log*
 next-env.d.ts
 
 .playwright-mcp/
+.tmp-avatar-test-*/
+
+# Local verification output
+/artifacts/
+.data/
+design-qa.md
+
+# Local project guidance
+AGENTS.md
+PRODUCT.md
+MVP.md
+DEPLOYMENT.md
+KNOWN_ISSUES.md
